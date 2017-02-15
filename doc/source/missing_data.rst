@@ -721,3 +721,58 @@ However, these can be filled in using **fillna** and it will work fine:
 
    reindexed[crit.fillna(False)]
    reindexed[crit.fillna(True)]
+
+Outliers in Time Series
+~~~~~~~~~~~~~~~~~~~~~~~
+
+In statistics an outlier is an observation that is distant from the other observations. Identifying and understanding outliers is important as they may be a mistake (e.g., data entry or experimental error) or they may be important information (.e.g, signal in the noise).  In the former  case the outlier should be excluded from analysis by replacing it with NaN or interpolated from neighbouring data. In the latter they need to be examined for the information they contain.
+
+In either case the first step is finding the outliers. While there is no right way to do this for a time series there is a simple process:
+
+1. Remove any trend. This is known as making the time series `stationary 
+   <https://en.wikipedia.org/wiki/Stationary_process>`_. If there is a clear seasonal trend this should be removed too.
+2. Apply a measure of dispersion from the mean, e.g., Z Score, Robust Z Score (RZS) or Inter Quartile Range (IQR)
+3. Outliers are observations with a score outside of some range, e.g., 5 standard deviation.
+
+
+A simple way to understand this is after we removing the trend (or seasonal component) the data, i.e., the 'residues', are likely to be 'near normal'. We then define an outliers as data that is more than some number of `standard deviations from the mean <https://en.wikipedia.org/wiki/Standard_deviation>`_.
+
+
+In the example below we assume the time series is stationary and look for observations more than 2 standard deviations from the mean using the z score.
+
+.. ipython:: python
+
+   ts = pd.Series(np.random.randn(10), index=pd.DatetimeIndex(start='1-1-2017', periods=10, freq="M"))
+   ts['31-03-2017'] = 7
+
+   zscore = lambda x: (x - x.mean())/x.std()
+   ts[abs(zscore(ts)) > 2]
+   
+
+The problem with Z Score is it's heavily influenced by the outliers. The use of `robust statistics <https://en.wikipedia.org/wiki/Robust_measures_of_scale>`_ addresses this problem by using `Interquartile Range <https://en.wikipedia.org/wiki/Interquartile_range>`_ (IQR) or `Median Absolute Deviation <https://en.wikipedia.org/wiki/Median_absolute_deviation>`_ (MAD) and median. 
+
+Robust Z Score
+^^^^^^^^^^^^^^^
+
+This is a robust version of the z score based using median and MAD in place of mean and standard deviation.  
+
+.. ipython:: python
+	
+   from scipy.stats import norm as Gaussian
+   robustZscore = lambda x: (x - x.median())/x.mad()* Gaussian.ppf(3/4.)
+   ts[abs(robustZscore(ts)) > 2]
+   
+   
+IQR Method
+^^^^^^^^^^
+
+This defines an outlier as observations 1.5 IQR above (below) the 75% quartile (25% quartile). 
+
+.. ipython:: python
+
+   def IQR(ts):
+      q = ts.quantile([0.25,.75])
+      IQR = q[0.75] - q[0.25]
+      return (ts < (q[0.25] - 1.5*IQR)) | (ts > (q[0.75] + 1.5*IQR))
+
+   ts[IQR(ts)]
